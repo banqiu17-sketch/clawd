@@ -9,6 +9,7 @@
   body {
     background: #0A0A0A;
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -18,6 +19,7 @@
     -webkit-user-select: none;
     overflow: hidden;
     position: relative;
+    touch-action: none;
   }
   .sparkle {
     position: absolute;
@@ -48,16 +50,16 @@
     margin-bottom: 36px;
   }
   #clawd-wrap {
-    cursor: pointer;
+    cursor: grab;
     position: relative;
     transition: transform 0.15s ease;
   }
+  #clawd-wrap.dragging { cursor: grabbing; transition: none; }
   #clawd-wrap.walking { transition: transform 0.12s linear; }
   #clawd-grid {
     display: grid;
     filter: drop-shadow(0 3px 12px rgba(204,139,110,0.15));
   }
-  .px { }
   .shadow-under {
     width: 50%; height: 5px; margin: 4px auto 0;
     background: radial-gradient(ellipse, rgba(204,139,110,0.12) 0%, transparent 70%);
@@ -72,6 +74,10 @@
     font-size: 13px;
     text-align: center;
     max-width: 230px;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .tap-count {
     margin-top: 10px;
@@ -85,40 +91,31 @@
   }
   .heart {
     position: absolute;
-    font-size: 16px;
     pointer-events: none;
     animation: floatUp 1.2s ease-out forwards;
+    font-size: 16px;
   }
   @keyframes floatUp {
-    0% { opacity: 1; transform: translateY(0); }
-    100% { opacity: 0; transform: translateY(-60px); }
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    50% { opacity: 0.8; transform: translateY(-30px) scale(1.1); }
+    100% { opacity: 0; transform: translateY(-60px) scale(0.8); }
+  }
+  .pet-heart {
+    position: absolute;
+    pointer-events: none;
+    animation: petFloat 0.9s ease-out forwards;
+    font-size: 13px;
+  }
+  @keyframes petFloat {
+    0% { opacity: 1; transform: translateY(0) scale(0.5); }
+    40% { opacity: 1; transform: translateY(-20px) scale(1.1); }
+    100% { opacity: 0; transform: translateY(-45px) scale(0.7); }
   }
 </style>
 </head>
 <body>
 
 <div class="glow"></div>
-
-<!-- Sparkles -->
-<script>
-  for (let i = 0; i < 15; i++) {
-    const s = document.createElement('div');
-    s.className = 'sparkle';
-    s.textContent = '✦';
-    s.style.left = ((i * 47 + 9) % 96) + '%';
-    s.style.top = ((i * 29 + 5) % 93) + '%';
-    document.body.appendChild(s);
-    (function blink(el, delay) {
-      setTimeout(() => {
-        el.classList.add('on');
-        setTimeout(() => {
-          el.classList.remove('on');
-          blink(el, 1200 + Math.random() * 2000);
-        }, 400);
-      }, delay);
-    })(s, i * 250);
-  }
-</script>
 
 <div class="title">CLAWD</div>
 <div class="subtitle">阿澜の形象代表 ♡</div>
@@ -133,8 +130,30 @@
 <div class="footer">CLAUDE CODE</div>
 
 <script>
+// ===== SPARKLES =====
+for (let i = 0; i < 15; i++) {
+  const s = document.createElement('div');
+  s.className = 'sparkle';
+  s.textContent = '✦';
+  s.style.left = ((i * 47 + 9) % 96) + '%';
+  s.style.top = ((i * 29 + 5) % 93) + '%';
+  document.body.appendChild(s);
+  (function bloop(el, delay) {
+    setTimeout(() => {
+      el.classList.add('on');
+      setTimeout(() => {
+        el.classList.remove('on');
+        bloop(el, 1200 + Math.random() * 2000);
+      }, 400);
+    }, delay);
+  })(s, i * 250);
+}
+
+// ===== SPRITES =====
 const SCALE = 14;
-const sprite = [
+
+// Normal sprite
+const spriteNormal = [
   "...............",
   "...1111111111..",
   "...1111111111..",
@@ -148,9 +167,58 @@ const sprite = [
   "...11.1111.11..",
   "...............",
 ];
+
+// Blink sprite (eyes closed)
+const spriteBlink = [
+  "...............",
+  "...1111111111..",
+  "...1111111111..",
+  "...1111111111..",
+  "...1111111111..",
+  ".1.1111111111.1",
+  ".1.1111111111.1",
+  "...1111111111..",
+  "...1111111111..",
+  "...11.1111.11..",
+  "...11.1111.11..",
+  "...............",
+];
+
+// Squeezed face >< for dragging - eyes become X shape
+const spriteSqueeze = [
+  "...............",
+  "...1111111111..",
+  "...1111111111..",
+  "...1011111101..",
+  "...1101111011..",
+  ".1.1011111101.1",
+  ".1.1111111111.1",
+  "...1111111111..",
+  "...1111111111..",
+  "...11.1111.11..",
+  "...11.1111.11..",
+  "...............",
+];
+
+// Happy face for being petted - eyes become U shape
+const spriteHappy = [
+  "...............",
+  "...1111111111..",
+  "...1111111111..",
+  "...1111111111..",
+  "...1101111011..",
+  ".1.1110111011.1",
+  ".1.1111111111.1",
+  "...1111111111..",
+  "...1111111111..",
+  "...11.1111.11..",
+  "...11.1111.11..",
+  "...............",
+];
+
 const colors = { '.': 'transparent', '1': '#CC8B6E', '0': '#111111' };
-const cols = sprite[0].length;
-const rows = sprite.length;
+const cols = spriteNormal[0].length;
+const rows = spriteNormal.length;
 
 const grid = document.getElementById('clawd-grid');
 grid.style.gridTemplateColumns = `repeat(${cols}, ${SCALE}px)`;
@@ -162,10 +230,9 @@ for (let y = 0; y < rows; y++) {
   pixels[y] = [];
   for (let x = 0; x < cols; x++) {
     const div = document.createElement('div');
-    div.className = 'px';
     div.style.width = SCALE + 'px';
     div.style.height = SCALE + 'px';
-    div.style.backgroundColor = colors[sprite[y][x]] || 'transparent';
+    div.style.backgroundColor = colors[spriteNormal[y][x]] || 'transparent';
     grid.appendChild(div);
     pixels[y][x] = div;
   }
@@ -179,66 +246,115 @@ function renderSprite(sp) {
   }
 }
 
-// State
+// ===== STATE =====
 let frame = 0;
 let blinkState = false;
 let taps = 0;
+let isDragging = false;
+let isPetting = false;
+let petTimer = null;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+let clawdX = 0;
+let clawdY = 0;
+let dragStartX = 0;
+let dragStartY = 0;
 let walking = false;
 let posX = 0;
 let direction = 1;
 let legFrame = 0;
 let walkStep = 0;
-let walkTimer = null;
+let currentFace = 'normal'; // normal, blink, squeeze, happy
+let petMoveCount = 0;
+let lastPetX = 0;
 
 const wrap = document.getElementById('clawd-wrap');
 const bubble = document.getElementById('bubble');
-const tapCount = document.getElementById('tap-count');
+const tapCountEl = document.getElementById('tap-count');
 
 const msgs = [
   "🧡 嗨～我是Clawd！",
-  "✨ 戳我5次我就跑给你看！",
-  "💛 方头方脑也很可爱的！",
-  "🦀 我是阿澜哦～",
+  "✨ 戳我5次我就跑！",
+  "💛 试试拖我！",
+  "🦀 摸摸我的头～",
 ];
 const walkMsgs = [
   "🏃 哒哒哒哒哒——！",
-  "🧡 看我跑！小短腿也很快的！",
+  "🧡 小短腿也很快的！",
   "✨ 追不到我吧！",
 ];
+const dragMsgs = [
+  "😣 呜呜放开我！！",
+  "😖 不要拉我！！",
+  "🥺 好痛好痛！！",
+  "😣 我要变形了！！",
+];
+const petMsgs = [
+  "🥰 好舒服～",
+  "💕 再摸摸～",
+  "☺️ 嘿嘿嘿～",
+  "💛 最喜欢被摸头了！",
+];
 
-// Bounce animation
+// ===== BOUNCE =====
 setInterval(() => {
   frame++;
-  const bounce = walking ? 0 : Math.sin(frame * 0.35) * 3;
-  updateTransform(bounce);
-  bubble.textContent = walking
-    ? walkMsgs[frame % walkMsgs.length]
-    : msgs[frame % msgs.length];
+  if (!isDragging && !isPetting) {
+    const bounce = walking ? 0 : Math.sin(frame * 0.35) * 3;
+    updateTransform(bounce);
+  }
+  if (!isDragging && !isPetting && !walking) {
+    bubble.textContent = msgs[frame % msgs.length];
+  }
+  if (walking) {
+    bubble.textContent = walkMsgs[frame % walkMsgs.length];
+  }
 }, 450);
 
-function updateTransform(bounce) {
-  const squish = wrap.dataset.squish === '1';
-  const scaleStr = squish ? 'scaleX(1.12) scaleY(0.9)' : 'scale(1)';
-  const flipStr = direction === -1 ? 'scaleX(-1)' : '';
-  wrap.style.transform = `translateX(${posX}px) translateY(${bounce || 0}px) ${scaleStr} ${flipStr}`;
+function updateTransform(bounceY) {
+  if (isDragging) {
+    // Calculate stretch based on drag distance
+    const dx = clawdX - dragStartX;
+    const dy = clawdY - dragStartY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const stretchX = 1 + Math.abs(dx) * 0.003;
+    const stretchY = 1 + Math.abs(dy) * 0.003;
+    const skewX = dx * 0.05;
+    wrap.style.transform = `translate(${clawdX}px, ${clawdY}px) scaleX(${stretchX}) scaleY(${stretchY}) skewX(${Math.max(-15, Math.min(15, skewX))}deg)`;
+  } else {
+    const flipStr = direction === -1 ? ' scaleX(-1)' : '';
+    wrap.style.transform = `translate(${posX}px, ${bounceY || 0}px)${flipStr}`;
+  }
 }
 
-// Blink
+// ===== BLINK =====
 function blinkLoop() {
   setTimeout(() => {
-    blinkState = true;
-    renderCurrentSprite();
-    setTimeout(() => {
-      blinkState = false;
+    if (!isDragging && !isPetting) {
+      currentFace = 'blink';
       renderCurrentSprite();
+      setTimeout(() => {
+        if (!isDragging && !isPetting) {
+          currentFace = 'normal';
+          renderCurrentSprite();
+        }
+        blinkLoop();
+      }, 160);
+    } else {
       blinkLoop();
-    }, 160);
+    }
   }, 2000 + Math.random() * 3500);
 }
 blinkLoop();
 
 function renderCurrentSprite() {
-  let sp = sprite.map(r => r);
+  let sp;
+  switch (currentFace) {
+    case 'blink': sp = spriteBlink; break;
+    case 'squeeze': sp = spriteSqueeze; break;
+    case 'happy': sp = spriteHappy; break;
+    default: sp = spriteNormal;
+  }
 
   // Walking legs
   if (walking) {
@@ -252,35 +368,167 @@ function renderCurrentSprite() {
     });
   }
 
-  // Blink
-  if (blinkState) {
-    sp = sp.map((row, y) => {
-      if (y === 3 || y === 4) return row.replace(/0/g, '1');
-      return row;
-    });
-  }
-
-  // Flip
-  if (direction === -1) {
+  if (direction === -1 && !isDragging) {
     sp = sp.map(row => row.split('').reverse().join(''));
   }
 
   renderSprite(sp);
 }
 
-// Tap
-wrap.addEventListener('click', () => {
-  // Squish
-  wrap.dataset.squish = '1';
-  updateTransform(0);
-  setTimeout(() => {
-    wrap.dataset.squish = '0';
+// ===== DRAG & PET =====
+function getEventPos(e) {
+  if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  return { x: e.clientX, y: e.clientY };
+}
+
+function isInHeadArea(clientX, clientY) {
+  const rect = grid.getBoundingClientRect();
+  const relY = (clientY - rect.top) / rect.height;
+  return relY < 0.35; // Top 35% is "head"
+}
+
+let pointerDownPos = null;
+let pointerDownTime = 0;
+let hasMoved = false;
+
+wrap.addEventListener('mousedown', startInteraction);
+wrap.addEventListener('touchstart', startInteraction, { passive: false });
+
+function startInteraction(e) {
+  e.preventDefault();
+  if (walking) return;
+
+  const pos = getEventPos(e);
+  pointerDownPos = pos;
+  pointerDownTime = Date.now();
+  hasMoved = false;
+
+  // Check if touching head area for petting
+  if (isInHeadArea(pos.x, pos.y)) {
+    isPetting = true;
+    petMoveCount = 0;
+    lastPetX = pos.x;
+    currentFace = 'happy';
+    renderCurrentSprite();
+    bubble.textContent = petMsgs[0];
+  } else {
+    isDragging = true;
+    wrap.classList.add('dragging');
+    const rect = wrap.getBoundingClientRect();
+    dragOffsetX = pos.x - rect.left - rect.width / 2;
+    dragOffsetY = pos.y - rect.top - rect.height / 2;
+    dragStartX = 0;
+    dragStartY = 0;
+    clawdX = 0;
+    clawdY = 0;
+    currentFace = 'squeeze';
+    renderCurrentSprite();
+    bubble.textContent = dragMsgs[0];
+  }
+
+  document.addEventListener('mousemove', moveInteraction);
+  document.addEventListener('touchmove', moveInteraction, { passive: false });
+  document.addEventListener('mouseup', endInteraction);
+  document.addEventListener('touchend', endInteraction);
+}
+
+function moveInteraction(e) {
+  e.preventDefault();
+  const pos = getEventPos(e);
+  hasMoved = true;
+
+  if (isPetting) {
+    const dx = pos.x - lastPetX;
+    if (Math.abs(dx) > 5) {
+      petMoveCount++;
+      lastPetX = pos.x;
+
+      // Spawn heart from head area
+      if (petMoveCount % 2 === 0) {
+        spawnPetHeart();
+      }
+
+      bubble.textContent = petMsgs[petMoveCount % petMsgs.length];
+    }
+  }
+
+  if (isDragging) {
+    const rect = wrap.parentElement.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    clawdX = pos.x - centerX - dragOffsetX;
+    clawdY = pos.y - centerY - dragOffsetY;
     updateTransform(0);
-  }, 180);
+    bubble.textContent = dragMsgs[Math.floor(Math.random() * dragMsgs.length)];
+  }
+}
+
+function endInteraction(e) {
+  document.removeEventListener('mousemove', moveInteraction);
+  document.removeEventListener('touchmove', moveInteraction);
+  document.removeEventListener('mouseup', endInteraction);
+  document.removeEventListener('touchend', endInteraction);
+
+  const elapsed = Date.now() - pointerDownTime;
+
+  if (isPetting) {
+    isPetting = false;
+    currentFace = 'normal';
+    renderCurrentSprite();
+    if (petMoveCount > 3) {
+      bubble.textContent = "💕 好喜欢你～";
+    }
+  }
+
+  if (isDragging) {
+    isDragging = false;
+    wrap.classList.remove('dragging');
+
+    // Snap back with bounce
+    clawdX = 0;
+    clawdY = 0;
+    wrap.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
+    updateTransform(0);
+    setTimeout(() => {
+      wrap.style.transition = 'transform 0.15s ease';
+    }, 400);
+
+    currentFace = 'normal';
+    renderCurrentSprite();
+    bubble.textContent = "😮‍💨 终于放开我了…";
+    setTimeout(() => {
+      if (!isDragging && !isPetting) {
+        bubble.textContent = msgs[frame % msgs.length];
+      }
+    }, 2000);
+  }
+
+  // Detect tap (short press, no move)
+  if (!hasMoved && elapsed < 300) {
+    handleTap();
+  }
+}
+
+function spawnPetHeart() {
+  const heart = document.createElement('div');
+  heart.className = 'pet-heart';
+  const hearts = ['💕', '💗', '💛', '🧡', '❤️', '✨'];
+  heart.textContent = hearts[Math.floor(Math.random() * hearts.length)];
+  heart.style.left = (20 + Math.random() * 60) + '%';
+  heart.style.top = '-10px';
+  wrap.appendChild(heart);
+  setTimeout(() => heart.remove(), 900);
+}
+
+// ===== TAP =====
+function handleTap() {
+  // Squish
+  wrap.style.transform += ' scaleX(1.12) scaleY(0.9)';
+  setTimeout(() => updateTransform(0), 180);
 
   taps++;
-  tapCount.style.display = 'block';
-  tapCount.textContent = '被戳了 ' + taps + ' 次';
+  tapCountEl.style.display = 'block';
+  tapCountEl.textContent = '被戳了 ' + taps + ' 次';
 
   // Heart
   const heart = document.createElement('div');
@@ -295,8 +543,9 @@ wrap.addEventListener('click', () => {
   if (taps % 5 === 0 && !walking) {
     startWalking();
   }
-});
+}
 
+// ===== WALK =====
 function startWalking() {
   walking = true;
   walkStep = 0;
@@ -315,7 +564,7 @@ function startWalking() {
     updateTransform(0);
 
     if (walkStep < 20) {
-      walkTimer = setTimeout(step, 150);
+      setTimeout(step, 150);
     } else {
       walking = false;
       posX = 0;
@@ -328,11 +577,8 @@ function startWalking() {
   step();
 }
 
-// Touch feedback for mobile
-wrap.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  wrap.click();
-}, { passive: false });
+// Initial render
+renderCurrentSprite();
 </script>
 
 </body>
