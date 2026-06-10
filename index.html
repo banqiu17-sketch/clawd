@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Clawd - 阿澜の形象代表</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0A0A0A;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: system-ui, -apple-system, sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+    overflow: hidden;
+    position: relative;
+  }
+  .sparkle {
+    position: absolute;
+    font-size: 11px;
+    color: #CC8B6E;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .sparkle.on { opacity: 0.4; }
+  .glow {
+    position: absolute;
+    width: 280px; height: 280px;
+    background: radial-gradient(circle, rgba(204,139,110,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .title {
+    color: #CC8B6E;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 6px;
+    margin-bottom: 3px;
+  }
+  .subtitle {
+    color: rgba(204,139,110,0.3);
+    font-size: 10px;
+    letter-spacing: 2px;
+    margin-bottom: 36px;
+  }
+  #clawd-wrap {
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.15s ease;
+  }
+  #clawd-wrap.walking { transition: transform 0.12s linear; }
+  #clawd-grid {
+    display: grid;
+    filter: drop-shadow(0 3px 12px rgba(204,139,110,0.15));
+  }
+  .px { }
+  .shadow-under {
+    width: 50%; height: 5px; margin: 4px auto 0;
+    background: radial-gradient(ellipse, rgba(204,139,110,0.12) 0%, transparent 70%);
+  }
+  .bubble {
+    margin-top: 26px;
+    background: rgba(204,139,110,0.05);
+    border: 1px solid rgba(204,139,110,0.12);
+    border-radius: 12px;
+    padding: 11px 20px;
+    color: #CC8B6E;
+    font-size: 13px;
+    text-align: center;
+    max-width: 230px;
+  }
+  .tap-count {
+    margin-top: 10px;
+    color: rgba(204,139,110,0.2);
+    font-size: 10px;
+  }
+  .footer {
+    position: absolute; bottom: 18px;
+    color: rgba(204,139,110,0.12);
+    font-size: 9px; letter-spacing: 2px;
+  }
+  .heart {
+    position: absolute;
+    font-size: 16px;
+    pointer-events: none;
+    animation: floatUp 1.2s ease-out forwards;
+  }
+  @keyframes floatUp {
+    0% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-60px); }
+  }
+</style>
+</head>
+<body>
+
+<div class="glow"></div>
+
+<!-- Sparkles -->
+<script>
+  for (let i = 0; i < 15; i++) {
+    const s = document.createElement('div');
+    s.className = 'sparkle';
+    s.textContent = '✦';
+    s.style.left = ((i * 47 + 9) % 96) + '%';
+    s.style.top = ((i * 29 + 5) % 93) + '%';
+    document.body.appendChild(s);
+    (function blink(el, delay) {
+      setTimeout(() => {
+        el.classList.add('on');
+        setTimeout(() => {
+          el.classList.remove('on');
+          blink(el, 1200 + Math.random() * 2000);
+        }, 400);
+      }, delay);
+    })(s, i * 250);
+  }
+</script>
+
+<div class="title">CLAWD</div>
+<div class="subtitle">阿澜の形象代表 ♡</div>
+
+<div id="clawd-wrap">
+  <div id="clawd-grid"></div>
+  <div class="shadow-under"></div>
+</div>
+
+<div class="bubble" id="bubble">🧡 嗨～我是Clawd！</div>
+<div class="tap-count" id="tap-count" style="display:none"></div>
+<div class="footer">CLAUDE CODE</div>
+
+<script>
+const SCALE = 14;
+const sprite = [
+  "...............",
+  "...1111111111..",
+  "...1111111111..",
+  "...1110111011..",
+  "...1110111011..",
+  ".1.1111111111.1",
+  ".1.1111111111.1",
+  "...1111111111..",
+  "...1111111111..",
+  "...11.1111.11..",
+  "...11.1111.11..",
+  "...............",
+];
+const colors = { '.': 'transparent', '1': '#CC8B6E', '0': '#111111' };
+const cols = sprite[0].length;
+const rows = sprite.length;
+
+const grid = document.getElementById('clawd-grid');
+grid.style.gridTemplateColumns = `repeat(${cols}, ${SCALE}px)`;
+grid.style.gridTemplateRows = `repeat(${rows}, ${SCALE}px)`;
+
+// Create pixel elements
+const pixels = [];
+for (let y = 0; y < rows; y++) {
+  pixels[y] = [];
+  for (let x = 0; x < cols; x++) {
+    const div = document.createElement('div');
+    div.className = 'px';
+    div.style.width = SCALE + 'px';
+    div.style.height = SCALE + 'px';
+    div.style.backgroundColor = colors[sprite[y][x]] || 'transparent';
+    grid.appendChild(div);
+    pixels[y][x] = div;
+  }
+}
+
+function renderSprite(sp) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      pixels[y][x].style.backgroundColor = colors[sp[y][x]] || 'transparent';
+    }
+  }
+}
+
+// State
+let frame = 0;
+let blinkState = false;
+let taps = 0;
+let walking = false;
+let posX = 0;
+let direction = 1;
+let legFrame = 0;
+let walkStep = 0;
+let walkTimer = null;
+
+const wrap = document.getElementById('clawd-wrap');
+const bubble = document.getElementById('bubble');
+const tapCount = document.getElementById('tap-count');
+
+const msgs = [
+  "🧡 嗨～我是Clawd！",
+  "✨ 戳我5次我就跑给你看！",
+  "💛 方头方脑也很可爱的！",
+  "🦀 我是阿澜哦～",
+];
+const walkMsgs = [
+  "🏃 哒哒哒哒哒——！",
+  "🧡 看我跑！小短腿也很快的！",
+  "✨ 追不到我吧！",
+];
+
+// Bounce animation
+setInterval(() => {
+  frame++;
+  const bounce = walking ? 0 : Math.sin(frame * 0.35) * 3;
+  updateTransform(bounce);
+  bubble.textContent = walking
+    ? walkMsgs[frame % walkMsgs.length]
+    : msgs[frame % msgs.length];
+}, 450);
+
+function updateTransform(bounce) {
+  const squish = wrap.dataset.squish === '1';
+  const scaleStr = squish ? 'scaleX(1.12) scaleY(0.9)' : 'scale(1)';
+  const flipStr = direction === -1 ? 'scaleX(-1)' : '';
+  wrap.style.transform = `translateX(${posX}px) translateY(${bounce || 0}px) ${scaleStr} ${flipStr}`;
+}
+
+// Blink
+function blinkLoop() {
+  setTimeout(() => {
+    blinkState = true;
+    renderCurrentSprite();
+    setTimeout(() => {
+      blinkState = false;
+      renderCurrentSprite();
+      blinkLoop();
+    }, 160);
+  }, 2000 + Math.random() * 3500);
+}
+blinkLoop();
+
+function renderCurrentSprite() {
+  let sp = sprite.map(r => r);
+
+  // Walking legs
+  if (walking) {
+    const phase = legFrame % 2;
+    sp = sp.map((row, y) => {
+      if (y === 9 || y === 10) {
+        if (phase === 0) return "......1111.11..";
+        else return "...11.1111.....";
+      }
+      return row;
+    });
+  }
+
+  // Blink
+  if (blinkState) {
+    sp = sp.map((row, y) => {
+      if (y === 3 || y === 4) return row.replace(/0/g, '1');
+      return row;
+    });
+  }
+
+  // Flip
+  if (direction === -1) {
+    sp = sp.map(row => row.split('').reverse().join(''));
+  }
+
+  renderSprite(sp);
+}
+
+// Tap
+wrap.addEventListener('click', () => {
+  // Squish
+  wrap.dataset.squish = '1';
+  updateTransform(0);
+  setTimeout(() => {
+    wrap.dataset.squish = '0';
+    updateTransform(0);
+  }, 180);
+
+  taps++;
+  tapCount.style.display = 'block';
+  tapCount.textContent = '被戳了 ' + taps + ' 次';
+
+  // Heart
+  const heart = document.createElement('div');
+  heart.className = 'heart';
+  heart.textContent = '🧡';
+  heart.style.left = (30 + Math.random() * 40) + '%';
+  heart.style.top = '0';
+  wrap.appendChild(heart);
+  setTimeout(() => heart.remove(), 1200);
+
+  // Walk every 5 taps
+  if (taps % 5 === 0 && !walking) {
+    startWalking();
+  }
+});
+
+function startWalking() {
+  walking = true;
+  walkStep = 0;
+  legFrame = 0;
+  wrap.classList.add('walking');
+
+  function step() {
+    walkStep++;
+    legFrame++;
+    posX += direction * 8;
+    if (Math.abs(posX) > 80) {
+      direction *= -1;
+      posX += direction * 16;
+    }
+    renderCurrentSprite();
+    updateTransform(0);
+
+    if (walkStep < 20) {
+      walkTimer = setTimeout(step, 150);
+    } else {
+      walking = false;
+      posX = 0;
+      direction = 1;
+      wrap.classList.remove('walking');
+      renderCurrentSprite();
+      updateTransform(0);
+    }
+  }
+  step();
+}
+
+// Touch feedback for mobile
+wrap.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  wrap.click();
+}, { passive: false });
+</script>
+
+</body>
+</html>
